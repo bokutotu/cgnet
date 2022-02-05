@@ -132,20 +132,15 @@ class MoleculeDataset(Dataset):
         if self.embeddings is None:
             # Still returns three objects, but the third is an empty tensor
             return (
-                torch.tensor(self.coordinates[index],
-                             requires_grad=True, device=self.device),
-                torch.tensor(self.forces[index],
-                             device=self.device),
-                torch.tensor([])
+                self.coordinates[index],
+                self.forces[index],
+                []
             )
         else:
             return (
-                torch.tensor(self.coordinates[index],
-                             requires_grad=True, device=self.device),
-                torch.tensor(self.forces[index],
-                             device=self.device),
-                torch.tensor(self.embeddings[index],
-                             device=self.device)
+                self.coordinates[index],
+                self.forces[index],
+                self.embeddings[index],
             )
 
     def __len__(self):

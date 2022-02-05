@@ -1,0 +1,15 @@
+artifact_uri: file:///Users/kondouakira/Code/Lab/cgnet/mlruns/0/6dc5f35b5c2d4b7da2b8cf53e8e89214/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: 6dc5f35b5c2d4b7da2b8cf53e8e89214
+run_uuid: 6dc5f35b5c2d4b7da2b8cf53e8e89214
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1644048592381
+status: 1
+tags: []
+user_id: kondouakira
