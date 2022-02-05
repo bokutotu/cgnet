@@ -33,7 +33,7 @@ class Experiment(pl.LightningModule):
             ],
         )
 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
         coordinates = np.load(config.coordinates)
         forces = np.load(config.forces)
@@ -45,7 +45,7 @@ class Experiment(pl.LightningModule):
 
         zscores, _ = stats.get_zscore_array()
         all_stats, _ = stats.get_prior_statistics(as_list=True)
-        nnet = MLP(len(all_stats))
+        nnet = instantiate(config.model, input_size=len(all_stats))
         layers = [ZscoreLayer(zscores)]
         layers += [nnet]
         feature_layer = GeometryFeature(feature_tuples=stats.feature_tuples, device=device)
@@ -59,6 +59,7 @@ class Experiment(pl.LightningModule):
         priors += [HarmonicLayer(angle_indices, angle_list)]
 
         self.model = CGnet(layers, ForceLoss(), feature=feature_layer, priors=priors)
+        if config.model
         self.data_module = DataModule(
                 batch_size=config.batch_size, train_test_rate=config.train_test_rate, 
                 coordinates=coordinates, forces=forces
