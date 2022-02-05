@@ -1,6 +1,9 @@
 import sys
 sys.path.append("cgnet")
 
+import os
+from urllib.parse import urlparse
+
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor
 
@@ -69,6 +72,8 @@ class Experiment(pl.LightningModule):
                 feature_length=config.feature_length
         )
 
+        self.best_model_state_dict = self.model.state_dict()
+        self.val_loss = 1e20
 
     def configure_optimizers(self):
         params = self.model.parameters()
@@ -92,8 +97,13 @@ class Experiment(pl.LightningModule):
         coords, force = self.set_requires_grad(coords, force)
         potential, predicted_force = self._step(coords, force)
         loss = self.loss_fn(predicted_force, force)
-        self.log("train_loss", loss)
+        # self.log("train_loss", loss)
         return loss
+
+    def training_epoch_end(self, loss):
+        loss = np.array([float(item["loss"].detach().cpu()) for item in loss])
+        loss_avg = loss.mean()
+        self.log("train_loss", loss_avg)
 
     @torch.enable_grad()
     def validation_step(self, batch: Tensor, batch_idx: int):
@@ -101,8 +111,38 @@ class Experiment(pl.LightningModule):
         coords, force = self.set_requires_grad(coords, force)
         potential, predicted_force = self._step(coords, force)
         loss = self.loss_fn(predicted_force, force)
-        self.log("val_loss", loss)
+        # self.log("val_loss", loss)
         return loss
+
+    def validation_epoch_end(self, loss):
+        loss = np.array([float(i.detach().cpu()) for i in loss])
+        loss_avg = loss.mean()
+
+        if loss_avg <= self.val_loss:
+            self.val_loss = loss_avg
+            self.best_model_state_dict = self.model.state_dict()
+        self.log("validation_loss", loss_avg)
+
+    @torch.enable_grad()
+    def test_step(self, batch: Tensor, batch_idx: int):
+        coords, force, _ = batch
+        coords, force = self.set_requires_grad(coords, force)
+        potential, predicted_force = self._step(coords, force)
+        loss = self.loss_fn(predicted_force, force)
+        # self.log("test_loss", loss)
+        return loss
+
+    def test_epoch_end(self, loss):
+        loss = np.array([float(i.detach().cpu()) for i in loss])
+        loss_avg = loss.mean()
+
+        self.log("test_loss", loss_avg)
+
+    def save(self):
+        artifact_path = urlparse(self.logger._tracking_uri).path
+        self.artifact_path = os.path.join(
+            artifact_path, self.logger.experiment_id, self.logger.run_id, "artifacts")
+        torch.save(self.best_model_state_dict, self.artifact_path + "/model.pth")
 
     # train your model
     def fit(self):
@@ -121,6 +161,8 @@ class Experiment(pl.LightningModule):
     # run your whole experiments
     def run(self):
         self.fit()
+        self.trainer.test()
+        self.save()
 
     def log_artifact(self, artifact_path: str):
         self.logger.experiment.log_artifact(self.logger.run_id, artifact_path)
