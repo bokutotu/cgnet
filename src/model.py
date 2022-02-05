@@ -34,8 +34,9 @@ class LSTM(torch.nn.Module):
         # self.k = torch.nn.Parameter(torch.randn(1), requires_grad=True)
 
     def forward(self, x):
-        # x = torch.transpose(x, 0, 1)
-        x, _ = self.lstm(x)
-        x = torch.sum(x, dim=-1)
-        # x = torch.transpose(x, 0, 1)
-        return x
+        with torch.backends.cudnn.flags(False):
+            # x = torch.transpose(x, 0, 1)
+            x, _ = self.lstm(x)
+            x = torch.sum(x, dim=-1)
+            # x = torch.transpose(x, 0, 1)
+            return x

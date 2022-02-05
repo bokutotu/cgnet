@@ -14,7 +14,7 @@ from cgnet.feature.dataset import MoleculeDataset, MoleculeTimeSeriseDataset
 class DataModule(pl.LightningDataModule):
     def __init__(
             self, batch_size: int, train_test_rate: float, coordinates: np.array, 
-            forces: np.array, mode: str, feature_length=None
+            forces: np.array, mode: str, scale: float, feature_length=None
         ) -> None:
         super().__init__()
 
@@ -22,7 +22,8 @@ class DataModule(pl.LightningDataModule):
         self.mode = mode
         self.feature_length = feature_length
         coordinates = coordinates.astype(np.float32)
-        forces = forces.astype(np.float32)
+        forces = forces.astype(np.float32) * scale
+        print("force mean abs", np.mean(np.abs(forces)))
 
         len_coord = len(coordinates)
 
