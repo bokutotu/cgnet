@@ -33,6 +33,8 @@ class Experiment(pl.LightningModule):
             ],
         )
 
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
         coordinates = np.load(config.coordinates)
         forces = np.load(config.forces)
 
@@ -46,7 +48,7 @@ class Experiment(pl.LightningModule):
         nnet = MLP(len(all_stats))
         layers = [ZscoreLayer(zscores)]
         layers += [nnet]
-        feature_layer = GeometryFeature(feature_tuples=stats.feature_tuples)
+        feature_layer = GeometryFeature(feature_tuples=stats.feature_tuples, device=device)
 
         # prior layer
         bond_list, bond_keys = stats.get_prior_statistics(features='Bonds', as_list=True)
