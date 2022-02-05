@@ -1,13 +1,22 @@
+import sys
+sys.path.append("cgnet")
+
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import LearningRateMonitor
+
 import torch
 import torch.nn.functional as F
-from hydra.utils import instantiate
-from omegaconf import DictConfig
-from pytorch_lightning.callbacks import LearningRateMonitor
-from src.data_module import DataModule
-from src.model import VAE
 from torch import Tensor
 from torch.optim import Optimizer
+
+from hydra.utils import instantiate
+from omegaconf import DictConfig
+import numpy as np
+
+from cgnet.network.nnet import CGnet, HarmonicLayer, ForceLoss, ZscoreLayer
+from cgnet.feature import GeometryFeature, GeometryStatistics
+
+from src.model import MLP
 
 
 class Experiment(pl.LightningModule):
@@ -22,8 +31,32 @@ class Experiment(pl.LightningModule):
                 LearningRateMonitor(logging_interval="step"),
             ],
         )
-        self.model = VAE(latent_dim=config.latent_dim)
-        self.data_module = DataModule(batch_size=config.batch_size)
+
+        coordinates = np.load(config.coordinates)
+        forces = np.load(config.forces)
+
+        self.stats = GeometryStatistics(
+                coordinates, backbone_inds='all', get_all_distances=True, 
+                get_backbone_angles=True, get_backbone_dihedrals=True
+        )
+
+        zscores, _ = self.stats.get_zscore_array()
+        all_stats, _ = stats.get_prior_statistics(as_list=True)
+        nnet = MLP(len(all_stats))
+        layers = [ZscoreLayer(zscores)]
+        layers += [nnet]
+        feature_layer = GeometryFeature(feature_tuples=self.stats.feature_tuples)
+
+        # prior layer
+        bond_list, bond_keys = stats.get_prior_statistics(features='Bonds', as_list=True)
+        bond_indices = stats.return_indices('Bonds')
+        angle_list, angle_keys = stats.get_prior_statistics(features='Angles', as_list=True)
+        angle_indices = stats.return_indices('Angles')
+        priors  = [HarmonicLayer(bond_indices, bond_list)]
+        priors += [HarmonicLayer(angle_indices, angle_list)]
+
+        self.model = CGnet(layers, ForceLoss, feature=feature_layer, priors=priors)
+
 
     def configure_optimizers(self):
         params = self.model.parameters()

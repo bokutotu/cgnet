@@ -1,3 +1,6 @@
+import sys
+sys.path.append("cgnet")
+
 import os
 from typing import Optional
 

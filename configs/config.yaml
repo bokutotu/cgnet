@@ -26,6 +26,9 @@ latent_dim: 20
 # read more here: https://hydra.cc/docs/next/tutorials/basic/running_your_app/working_directory
 work_dir: ${hydra:runtime.cwd}
 
+# dataset path
+coordinates: ~/HDD/Lab/python_preprocess/train_c_trj.npy
+forces: ~/HDD/Lab/python_preprocess/train_f_trj.npy
 
 hydra:
     # output paths for hydra logs

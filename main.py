@@ -1,3 +1,7 @@
+import sys
+sys.path.append("cgnet")
+
+
 import hydra
 from omegaconf import DictConfig
 from src.experiment import Experiment
