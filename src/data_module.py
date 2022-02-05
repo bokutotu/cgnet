@@ -8,14 +8,19 @@ import numpy as np
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from cgnet.feature.dataset import MoleculeDataset
+from cgnet.feature.dataset import MoleculeDataset, MoleculeTimeSeriseDataset
 
 
 class DataModule(pl.LightningDataModule):
-    def __init__(self, batch_size: int, train_test_rate: float, coordinates: np.array, forces: np.array) -> None:
+    def __init__(
+            self, batch_size: int, train_test_rate: float, coordinates: np.array, 
+            forces: np.array, mode: str, feature_length=None
+        ) -> None:
         super().__init__()
 
         self.batch_size = batch_size
+        self.mode = mode
+        self.feature_length = feature_length
         coordinates = coordinates.astype(np.float32)
         forces = forces.astype(np.float32)
 
@@ -43,9 +48,21 @@ class DataModule(pl.LightningDataModule):
     def setup(self, stage: Optional[str] = None) -> None:
         # make assignments here (val/train/test split)
         # called on every GPUs
-        self.train = MoleculeDataset(coordinates=self.train_coord, forces=self.train_force)
-        self.val = MoleculeDataset(coordinates=self.val_coord, forces=self.val_force)
-        self.test = MoleculeDataset(coordinates=self.test_coord, forces=self.test_force)
+        if self.mode == "mlp":
+            self.train = MoleculeDataset(coordinates=self.train_coord, forces=self.train_force)
+            self.val = MoleculeDataset(coordinates=self.val_coord, forces=self.val_force)
+            self.test = MoleculeDataset(coordinates=self.test_coord, forces=self.test_force)
+        else:
+            self.train = MoleculeTimeSeriseDataset(
+                    coordinates=self.train_coord, forces=self.train_force, 
+                    feature_length=self.feature_length)
+            self.val = MoleculeTimeSeriseDataset(
+                    coordinates=self.val_coord, forces=self.val_force, 
+                    feature_length=self.feature_length)
+            self.test = MoleculeTimeSeriseDataset(
+                    coordinates=self.test_coord, forces=self.test_force, 
+                    feature_length=self.feature_length)
+
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(

@@ -59,10 +59,14 @@ class Experiment(pl.LightningModule):
         priors += [HarmonicLayer(angle_indices, angle_list)]
 
         self.model = CGnet(layers, ForceLoss(), feature=feature_layer, priors=priors)
-        if config.model
+        if "MLP" in config.model._target_.split("."):
+            mode = "mlp"
+        else:
+            mode = "time"
         self.data_module = DataModule(
                 batch_size=config.batch_size, train_test_rate=config.train_test_rate, 
-                coordinates=coordinates, forces=forces
+                coordinates=coordinates, forces=forces, mode=mode, 
+                feature_length=config.feature_length
         )
 
 

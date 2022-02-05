@@ -201,6 +201,29 @@ class MoleculeDataset(Dataset):
                                  "as the coordinates/forces")
 
 
+class MoleculeTimeSeriseDataset(Dataset):
+
+    """Docstring for MoleculeTimeSeriseDataset. """
+
+    def __init__(self, coordinates: np.array, forces: np.array, feature_length: int):
+        """TODO: to be defined. """
+        self.coordinates = coordinates
+        self.forces = forces
+        self.len = len(self.coordinates)
+        self.feature_length = feature_length
+        
+    def __len__(self):
+        return self.len - self.feature_length
+
+    def __getitem__(self, index):
+        return (
+            self.coordinates[index:index+self.feature_length],
+            self.forces[index:index+self.feature_length],
+            []
+        )
+        
+
+
 class MultiMoleculeDataset(Dataset):
     """Dataset object for organizing data from molecules of differing sizes.
     It is meant to be paired with multi_molecule_collate function for use in

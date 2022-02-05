@@ -15,7 +15,7 @@ gpus: null
 lr: 1e-5
 epochs: 5
 batch_size: 128
-
+feature_length: 64
 train_test_rate: 0.8
 
 # path to original working directory (that `run.py` was executed from in command line)

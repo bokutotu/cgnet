@@ -135,6 +135,11 @@ class GeometryFeature(nn.Module):
         out : torch.Tensor
             Differentiable feature tensor
         """
+        is_time_serice = False
+        if len(data.size()) == 4:
+            is_time_serice = True
+            size = data.size()
+            data = torch.reshape(data, (size[0]*size[1], size[2], size[3]))
         n = len(data)
 
         self._coordinates = data
@@ -177,7 +182,10 @@ class GeometryFeature(nn.Module):
             self.dihedral_cosines = torch.Tensor([])
             self.dihedral_sines = torch.Tensor([])
 
-        return out
+        if is_time_serice:
+            return torch.reshape(out, (size[0], size[1], -1))
+        else:
+            return out
 
 
 class SchnetFeature(nn.Module):

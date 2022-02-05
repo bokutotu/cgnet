@@ -23,3 +23,19 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+
+class LSTM(torch.nn.Module):
+
+    def __init__(self, input_size, num_layers, dropout, hidden_size, output_size):
+        super().__init__()
+        self.lstm = torch.nn.LSTM(
+            input_size=input_size, hidden_size=hidden_size,
+            num_layers=num_layers, dropout=dropout, batch_first=True)
+        # self.k = torch.nn.Parameter(torch.randn(1), requires_grad=True)
+
+    def forward(self, x):
+        # x = torch.transpose(x, 0, 1)
+        x, _ = self.lstm(x)
+        x = torch.sum(x, dim=-1)
+        # x = torch.transpose(x, 0, 1)
+        return x

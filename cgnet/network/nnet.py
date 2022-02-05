@@ -232,6 +232,11 @@ class CGnet(nn.Module):
             geom_feature = coordinates
             energy = self.arch(feature_output)
         if self.priors:
+            if len(energy.size()) == 2:
+                batch_size = energy.size(0)
+                feature_length = energy.size(1)
+                geom_feature = torch.reshape(geom_feature, (batch_size * feature_length, -1))
+                energy = torch.reshape(energy, (batch_size * feature_length, -1))
             if geom_feature is None:
                 raise RuntimeError(
                     "Priors may only be used with GeometryFeatures or coordinates."
