@@ -23,6 +23,34 @@ from src.model import MLP
 from src.data_module import DataModule
 
 
+def prepare_model(coordinates: np.array, net_config):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    stats = GeometryStatistics(
+            coordinates[::100], backbone_inds='all', get_all_distances=True, 
+            get_backbone_angles=True, get_backbone_dihedrals=True
+    )
+
+    zscores, _ = stats.get_zscore_array()
+    all_stats, _ = stats.get_prior_statistics(as_list=True)
+    nnet = instantiate(net_config, input_size=len(all_stats))
+    layers = [ZscoreLayer(zscores)]
+    layers += [nnet]
+    feature_layer = GeometryFeature(feature_tuples=stats.feature_tuples, device=device)
+
+    # prior layer
+    bond_list, bond_keys = stats.get_prior_statistics(features='Bonds', as_list=True)
+    bond_indices = stats.return_indices('Bonds')
+    angle_list, angle_keys = stats.get_prior_statistics(features='Angles', as_list=True)
+    angle_indices = stats.return_indices('Angles')
+    priors  = [HarmonicLayer(bond_indices, bond_list)]
+    priors += [HarmonicLayer(angle_indices, angle_list)]
+
+    # self.model = CGnet(layers, ForceLoss(), feature=feature_layer, priors=priors)
+    model = CGnet(layers, torch.nn.MSELoss(), feature=feature_layer, priors=priors)
+    return model
+
+
 class Experiment(pl.LightningModule):
     def __init__(self, config: DictConfig) -> None:
         super(Experiment, self).__init__()
