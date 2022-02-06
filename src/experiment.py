@@ -23,7 +23,8 @@ from src.model import MLP
 from src.data_module import DataModule
 
 
-def prepare_model(coordinates: np.array, net_config):
+def prepare_model(coordinates: np.array, is_bond_prior: bool, is_angle_prior: bool, 
+        is_dihedral_prior: bool, net_config):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     stats = GeometryStatistics(
@@ -39,12 +40,23 @@ def prepare_model(coordinates: np.array, net_config):
     feature_layer = GeometryFeature(feature_tuples=stats.feature_tuples, device=device)
 
     # prior layer
-    bond_list, bond_keys = stats.get_prior_statistics(features='Bonds', as_list=True)
-    bond_indices = stats.return_indices('Bonds')
-    angle_list, angle_keys = stats.get_prior_statistics(features='Angles', as_list=True)
-    angle_indices = stats.return_indices('Angles')
-    priors  = [HarmonicLayer(bond_indices, bond_list)]
-    priors += [HarmonicLayer(angle_indices, angle_list)]
+    priors = []
+    if is_bond_prior:
+        bond_list, bond_keys = stats.get_prior_statistics(features='Bonds', as_list=True)
+        bond_indices = stats.return_indices('Bonds')
+        priors += [HarmonicLayer(bond_indices, bond_list)]
+    if is_angle_prior:
+        angle_list, angle_keys = stats.get_prior_statistics(features='Angles', as_list=True)
+        angle_indices = stats.return_indices('Angles')
+        priors += [HarmonicLayer(angle_indices, angle_list)]
+    if is_dihedral_prior:
+        dihedral_sin_list, _ = stats.get_prior_statistics(features='Dihedral_sines', as_list=True)
+        dihedral_cos_list, _ = stats.get_prior_statistics(features='Dihedral_cosines', as_list=True)
+        dihedral_cos_indices = stats.return_indices("Dihedral_cosines")
+        dihedral_sin_indices = stats.return_indices("Dihedral_sines")
+        priors += [HarmonicLayer(dihedral_sin_indices, dihedral_sin_list)]
+        priors += [HarmonicLayer(dihedral_cos_indices, dihedral_cos_list)]
+
 
     # self.model = CGnet(layers, ForceLoss(), feature=feature_layer, priors=priors)
     model = CGnet(layers, torch.nn.MSELoss(), feature=feature_layer, priors=priors)
@@ -63,34 +75,13 @@ class Experiment(pl.LightningModule):
                 LearningRateMonitor(logging_interval="step"),
             ],
         )
-
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
         coordinates = np.load(config.coordinates)
         forces = np.load(config.forces)
 
-        stats = GeometryStatistics(
-                coordinates[::100], backbone_inds='all', get_all_distances=True, 
-                get_backbone_angles=True, get_backbone_dihedrals=True
-        )
+        self.model = prepare_model(coordinates=coordinates, 
+                is_bond_prior=config.is_bond_prior, is_angle_prior=config.is_angle_prior,
+                is_dihedral_prior=config.is_dihedral_prior, net_config=config.model)
 
-        zscores, _ = stats.get_zscore_array()
-        all_stats, _ = stats.get_prior_statistics(as_list=True)
-        nnet = instantiate(config.model, input_size=len(all_stats))
-        layers = [ZscoreLayer(zscores)]
-        layers += [nnet]
-        feature_layer = GeometryFeature(feature_tuples=stats.feature_tuples, device=device)
-
-        # prior layer
-        bond_list, bond_keys = stats.get_prior_statistics(features='Bonds', as_list=True)
-        bond_indices = stats.return_indices('Bonds')
-        angle_list, angle_keys = stats.get_prior_statistics(features='Angles', as_list=True)
-        angle_indices = stats.return_indices('Angles')
-        priors  = [HarmonicLayer(bond_indices, bond_list)]
-        priors += [HarmonicLayer(angle_indices, angle_list)]
-
-        # self.model = CGnet(layers, ForceLoss(), feature=feature_layer, priors=priors)
-        self.model = CGnet(layers, torch.nn.MSELoss(), feature=feature_layer, priors=priors)
         if "MLP" in config.model._target_.split("."):
             mode = "mlp"
         else:
