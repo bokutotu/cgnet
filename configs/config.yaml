@@ -11,12 +11,18 @@ defaults:
 
 # global configurations
 experiment_name: Default
-gpus: null
-lr: 1e-5
-epochs: 5
-batch_size: 128
+gpus: -1
+lr: 1e-6
+epochs: 50
+batch_size: 512
 feature_length: 64
 train_test_rate: 0.8
+
+is_bond_prior: true
+is_angle_prior: true
+is_dihedral_prior: true
+
+scale: 1e5
 
 # path to original working directory (that `run.py` was executed from in command line)
 # hydra hijacks working directory by changing it to the current log directory,
@@ -25,8 +31,8 @@ train_test_rate: 0.8
 work_dir: ${hydra:runtime.cwd}
 
 # dataset path
-coordinates: /Users/kondouakira/Code/Lab/python_preprocess/train_c_trj.npy
-forces: /Users/kondouakira/Code/Lab/python_preprocess/train_f_trj.npy
+coordinates: /home/bokutotu/HDD/Lab/python_preprocess/removed_c_trj.npy
+forces: /home/bokutotu/HDD/Lab/python_preprocess/removed_f_trj.npy
 
 hydra:
     # output paths for hydra logs
