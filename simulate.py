@@ -15,7 +15,9 @@ from src.experiment import prepare_model
 
 def setup_model(config: DictConfig):
     coordinates = np.load(config.coordinates)
-    model = prepare_model(coordinates=coordinates, net_config=config.model) 
+    model = prepare_model(coordinates=coordinates, net_config=config.model, 
+            is_bond_prior=config.is_bond_prior, is_angle_prior=config.is_angle_prior, 
+            is_dihedral_prior=config.is_dihedral_prior) 
     return model
 
 
@@ -61,7 +63,8 @@ def verlet_velocity(v: np.array, f_prev: np.array, f: np.array):
 
 def velocity_scaling(v: np.array, norm: float):
     velocity_sum_squre = np.sum(np.power(v, 2))
-    return v * norm / velocity_sum_squre
+    v = 1.8 * v * norm / velocity_sum_squre
+    return v
 
 
 def init_state_mlp(coordinates: np.array, velocity: np.array, forces: np.array, num_steps: int):
@@ -86,29 +89,32 @@ def force_mlp(scale: float, coordinates: np.array, forces: np.array, step: int, 
     return forces
 
 
+def update_mlp(coordinates: np.array, velocity: np.array, forces: np.array, step: int, *args, **kwargs):
+    velocity[step] = verlet_velocity(velocity[step-1], forces[step-1], forces[step])
+    norm = np.sum(np.power(velocity[0], 2))
+    velocity[step] = velocity_scaling(velocity[step], norm)
+    coordinates[step+1] = verlet_coord(coordinates[step], velocity[step], forces[step])
+    return coordinates, velocity
+
+
 def force_lstm(scale: float, coordinates: np.array, forces: np.array, step: int, 
         feature_length: int, model: torch.nn.Module):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     num_atoms = coordinates.shape[1]
     coordinates_tensor = torch.tensor(coordinates[step: step+feature_length]).to(device)
     coordinates_tensor = torch.unsqueeze(coordinates_tensor, 0).requires_grad_(True)
-    # coordinates_tensor = torch.reshape(coordinates_tensor, (1, feature_length, num_atoms, size[1], 3))
     _, pred_forces = model(coordinates_tensor)
-    pred_forces = forces[0,-1].detach().cpu().numpy()
+    pred_forces = pred_forces[0,-1].detach().cpu().numpy()
     forces[step+feature_length] = pred_forces / scale
     return forces
-
-
-def update_mlp(coordinates: np.array, velocity: np.array, forces: np.array, step: int, *args, **kwargs):
-    velocity[step] = verlet_velocity(velocity[step-1], forces[step-1], forces[step])
-    coordinates[step+1] = verlet_coord(coordinates[step], velocity[step], forces[step])
-    return coordinates, velocity
 
 
 def update_lstm(
         coordinates: np.array, velocity: np.array, forces: np.array, step: int, feature_length: int):
     velocity[step+feature_length] = \
         verlet_velocity(velocity[step-1+feature_length], forces[step-1+feature_length], forces[step+feature_length])
+    norm = np.sum(np.power(velocity[4], 2))
+    velocity[step+feature_length] = velocity_scaling(velocity[step+feature_length], norm)
     coordinates[step+1+feature_length] = \
             verlet_coord(coordinates[step+feature_length], velocity[step+feature_length], forces[step+feature_length])
     return coordinates, velocity
@@ -129,11 +135,10 @@ def simulate(
                 forces=forces, step=step, feature_length=config.feature_length)
 
     dir = Path(save_dir)
-    print(dir / save_name)
     dir.mkdir(parents=True, exist_ok=True)
-    np.save(dir / save_name, coordinates)
-    np.save(dir / ("f_"+save_name), forces)
-    np.save(dir / ("v_"+save_name), velocity)
+    np.save(dir / ("c_" + save_name), coordinates)
+    np.save(dir / ("f_" + save_name), forces)
+    np.save(dir / ("v_" + save_name), velocity)
     
 
 
@@ -143,25 +148,34 @@ def main(args):
     model = model.to(device)
     coordinates, velocity, forces = load_init_state(
             config.coordinates, args.velocity, config.forces)
-    if "MLP" in config.model._target_.split("."):
-        force_func = force_mlp
-        trj_coordinates, trj_velocity, trj_forces = init_state_mlp(coordinates, velocity, forces, 
-                args.num_steps)
-        update_func = update_mlp
-    else:
-        force_func = force_lstm
-        trj_coordinates, trj_velocity, trj_forces = init_state_lstm(coordinates, velocity, forces, 
-                args.num_steps)
-        update_func = update_lstm
 
-    if args.mode == "test":
-        force_func = test_func
-        trj_coordinates, trj_velocity, trj_forces = init_state_mlp(coordinates, velocity, forces, 
-                args.num_steps)
-        update_func=update_mlp
+    for sim_step in range(args.num_sim):
+        if "MLP" in config.model._target_.split("."):
+            force_func = force_mlp
+            trj_coordinates, trj_velocity, trj_forces = init_state_mlp(
+                    coordinates[sim_step * args.step_width::], 
+                    velocity[sim_step * args.step_width::], 
+                    forces[sim_step * args.step_width::], 
+                    args.num_steps)
+            update_func = update_mlp
+        else:
+            force_func = force_lstm
+            trj_coordinates, trj_velocity, trj_forces = init_state_lstm(
+                    coordinates[sim_step * args.step_width::], 
+                    velocity[sim_step * args.step_width::], 
+                    forces[sim_step * args.step_width::], 
+                    args.num_steps, config.feature_length)
+            update_func = update_lstm
 
-    simulate(trj_coordinates, trj_velocity, trj_forces, args.num_steps, model, config, 
-            force_func, update_func, save_name=args.save_name, save_dir=args.save_dir)
+        if args.mode == "test":
+            force_func = test_func
+            trj_coordinates, trj_velocity, trj_forces = init_state_mlp(coordinates, velocity, forces, 
+                    args.num_steps)
+            update_func=update_mlp
+
+        simulate(trj_coordinates, trj_velocity, trj_forces, args.num_steps, model, config, 
+                force_func, update_func, save_name=("{}_".format(sim_step) + args.save_name), 
+                save_dir=args.save_dir)
     
 
 if __name__ == "__main__":
@@ -172,5 +186,8 @@ if __name__ == "__main__":
     parser.add_argument("--velocity", type=str, help="速度のトラジェクトリへのパス")
     parser.add_argument("--save_dir", type=str, help="trj save dir")
     parser.add_argument("--save_name", type=str, help="保存名")
+    parser.add_argument("--num_sim", type=int, help="シミュレーションの回数")
+    parser.add_argument("--step_width", type=int, help="シミュレーションの初期構造の比較")
     args = parser.parse_args()
     main(args)
+
